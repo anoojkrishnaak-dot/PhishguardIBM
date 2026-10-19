@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PhishGuard | URL Security Scanner</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+<style>
+  :root {
+    --bg: #0b1120;
+    --panel: #111a2e;
+    --panel-border: #1e2a44;
+    --accent: #38bdf8;
+    --text: #e2e8f0;
+    --muted: #cbd5e1;
+    --faint: #94a3b8;
+    --info-bg: rgba(56, 189, 248, 0.12);
+    --info-fg: #7dd3fc;
+    --ok-bg: rgba(34, 197, 94, 0.14);
+    --ok-fg: #86efac;
+    --warn-bg: rgba(250, 204, 21, 0.14);
+    --warn-fg: #fde047;
+    --bad-bg: rgba(239, 68, 68, 0.16);
+    --bad-fg: #fca5a5;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+  }
+
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 48px 20px 64px;
+  }
+
+  .title {
+    text-align: center;
+    color: var(--accent);
+    font-size: 42px;
+    font-weight: bold;
+    margin: 0;
+  }
+
+  .subtitle {
+    text-align: center;
+    color: var(--muted);
+    font-size: 17px;
+    margin: 4px 0 24px;
+  }
+
+  .box {
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 0 0 16px;
+  }
+  .box.info { background: var(--info-bg); color: var(--info-fg); }
+  .box.ok   { background: var(--ok-bg);   color: var(--ok-fg); }
+  .box.warn { background: var(--warn-bg); color: var(--warn-fg); }
+  .box.bad  { background: var(--bad-bg);  color: var(--bad-fg); }
+
+  label {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 6px;
+    color: var(--muted);
+  }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 16px;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+  }
+  input[type="text"]::placeholder { color: #64748b; }
+  input[type="text"]:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  button#scan {
+    width: 100%;
+    margin-top: 12px;
+    padding: 12px 16px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #06202e;
+    background: var(--accent);
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button#scan:hover { background: #7dd3fc; }
+
+  #results { margin-top: 28px; }
+  #results[hidden] { display: none; }
+
+  h2, h3 { margin: 0 0 12px; }
+  h2 { font-size: 26px; }
+  h3 { font-size: 22px; }
+
+  #scale {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin: 0 0 20px;
+  }
+  #scale span {
+    text-align: center;
+    padding: 8px 4px;
+    font-size: 13px;
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--faint);
+    border: 1px solid var(--panel-border);
+  }
+  #scale span.active { font-weight: 700; border-color: currentColor; }
+  #scale span.active[data-level="ok"]   { background: var(--ok-bg);   color: var(--ok-fg); }
+  #scale span.active[data-level="warn"] { background: var(--warn-bg); color: var(--warn-fg); }
+  #scale span.active[data-level="bad"]  { background: var(--bad-bg);  color: var(--bad-fg); }
+
+  .metric-label { color: var(--faint); font-size: 14px; }
+  .metric-value { font-size: 36px; font-weight: 600; margin-bottom: 12px; }
+
+  ul.signals, ul.tips { margin: 6px 0 16px; padding-left: 22px; }
+  ul.signals li, ul.tips li { margin-bottom: 4px; }
+
+  .caption { color: var(--faint); font-size: 13px; }
+
+  hr {
+    border: 0;
+    border-top: 1px solid var(--panel-border);
+    margin: 36px 0 24px;
+  }
+
+  footer { text-align: center; margin-top: 28px; }
+</style>
+</head>
+<body>
+<main>
+  <h1 class="title">🛡️ PhishGuard</h1>
+  <div class="subtitle">Phishing URL Detection System</div>
+
+  <div class="box info">
+    Check a URL for common phishing warning signs. This tool uses basic rules, not a trained machine-learning model.
+  </div>
+
+  <label for="url">Enter a website URL</label>
+  <input type="text" id="url" placeholder="https://example.com" autocomplete="off" spellcheck="false">
+  <button id="scan" type="button">🔍 Scan URL</button>
+
+  <div id="warning" class="box warn" role="alert" hidden style="margin-top:16px">Please enter a URL before scanning.</div>
+
+  <section id="results" hidden aria-live="polite">
+    <h2>Scan Results</h2>
+    <div id="verdict" class="box"></div>
+    <div id="scale" aria-hidden="true">
+      <span data-level="ok">Lower Risk</span>
+      <span data-level="warn">Suspicious</span>
+      <span data-level="bad">Higher Risk</span>
+    </div>
+    <div class="metric-label">Heuristic Risk Score</div>
+    <div class="metric-value" id="score">0</div>
+    <strong>Warning signs:</strong>
+    <ul class="signals" id="signals"></ul>
+    <div class="caption">
+      A low score does not prove a website is safe. Do not enter passwords or banking details on websites you do not trust.
+    </div>
+  </section>
+
+  <hr>
+
+  <h3>🔐 Safety Tips</h3>
+  <ul class="tips">
+    <li>Check the domain name carefully.</li>
+    <li>Avoid suspicious links sent by unknown people.</li>
+    <li>Never share passwords or OTPs through unexpected links.</li>
+    <li>Use a trusted security service to investigate suspicious websites.</li>
+  </ul>
+
+  <footer class="caption">PhishGuard | Educational Cybersecurity Project</footer>
+</main>
+
+<script>
+  // Mirrors Python's urlparse: scheme is optional, netloc ends at the first / ? or #
+  function parseUrl(raw) {
+    const withScheme = raw.includes("://") ? raw : "https://" + raw;
+    const rest = withScheme.slice(withScheme.indexOf("://") + 3);
+    const netloc = rest.split(/[\/?#]/)[0];
+    let host = netloc.slice(netloc.lastIndexOf("@") + 1); // drop userinfo
+    if (host.startsWith("[")) {
+      const end = host.indexOf("]");
+      host = end === -1 ? host : host.slice(1, end);
+    } else {
+      host = host.split(":")[0]; // drop port
+    }
+    return { netloc: netloc, hostname: host.toLowerCase() };
+  }
+
+  function checkUrl(input) {
+    const signals = [];
+    let score = 0;
+
+    const url = input.trim();
+    if (!url) return { result: "UNKNOWN", score: 0, signals: ["Please enter a URL."] };
+
+    const parsed = parseUrl(url);
+    const hostname = parsed.hostname;
+    const fullUrl = url.toLowerCase();
+
+    // URL format
+    if (!hostname || !hostname.includes(".")) {
+      signals.push("Invalid or unusual domain format");
+      score += 2;
+    }
+
+    // HTTPS
+    if (!fullUrl.startsWith("https://")) {
+      signals.push("HTTPS is not explicitly used");
+      score += 1;
+    }
+
+    // IP address instead of domain name
+    if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)) {
+      signals.push("URL uses an IP address as its host");
+      score += 2;
+    }
+
+    // Suspicious keywords
+    const keywords = ["login", "verify", "account", "password", "update",
+                      "secure", "banking", "signin", "wallet", "confirm"];
+    const found = keywords.filter(w => fullUrl.includes(w));
+
+    if (found.length >= 3) {
+      signals.push("Several sensitive keywords appear in the URL");
+      score += 2;
+    } else if (found.length >= 1) {
+      signals.push("URL contains sensitive keywords: " + found.join(", "));
+      score += 1;
+    }
+
+    // @ symbol
+    if (parsed.netloc.includes("@")) {
+      signals.push("URL contains an @ symbol in its authority section");
+      score += 2;
+    }
+
+    // Excessive subdomains
+    if (hostname.split(".").length > 4) {
+      signals.push("Domain contains an unusually large number of parts");
+      score += 1;
+    }
+
+    // URL length
+    if (url.length > 100) {
+      signals.push("Unusually long URL");
+      score += 1;
+    }
+
+    // URL shorteners
+    const shorteners = ["bit.ly", "tinyurl.com", "t.co", "is.gd", "ow.ly"];
+    if (shorteners.some(d => hostname === d || hostname.endsWith("." + d))) {
+      signals.push("URL uses a link-shortening service");
+      score += 1;
+    }
+
+    // Classify
+    let result;
+    if (score >= 4) result = "HIGHER RISK";
+    else if (score >= 2) result = "SUSPICIOUS";
+    else result = "LOWER RISK";
+
+    if (signals.length === 0) {
+      signals.push("No warning signs detected by these basic checks");
+    }
+
+    return { result, score, signals };
+  }
+
+  const urlEl = document.getElementById("url");
+  const warningEl = document.getElementById("warning");
+  const resultsEl = document.getElementById("results");
+  const verdictEl = document.getElementById("verdict");
+  const scoreEl = document.getElementById("score");
+  const signalsEl = document.getElementById("signals");
+
+  function scan() {
+    if (!urlEl.value.trim()) {
+      resultsEl.hidden = true;
+      warningEl.hidden = false;
+      return;
+    }
+    warningEl.hidden = true;
+
+    const { result, score, signals } = checkUrl(urlEl.value);
+
+    const verdicts = {
+      "HIGHER RISK": ["bad",  "🚨 Higher Risk: Multiple warning signs detected"],
+      "SUSPICIOUS":  ["warn", "⚠️ Suspicious: Some warning signs detected"],
+      "LOWER RISK":  ["ok",   "✅ Lower Risk: Few warning signs detected"]
+    };
+    const [cls, text] = verdicts[result] || ["info", "Unable to assess this URL."];
+    verdictEl.className = "box " + cls;
+    verdictEl.textContent = text;
+
+    // Highlight the matching category in the three-part scale
+    document.querySelectorAll("#scale span").forEach(el => {
+      el.classList.toggle("active", el.dataset.level === cls);
+    });
+
+    scoreEl.textContent = score;
+
+    signalsEl.replaceChildren(...signals.map(s => {
+      const li = document.createElement("li");
+      li.textContent = s; // textContent keeps user-supplied URL text inert
+      return li;
+    }));
+
+    resultsEl.hidden = false;
+  }
+
+  document.getElementById("scan").addEventListener("click", scan);
+  urlEl.addEventListener("keydown", e => { if (e.key === "Enter") scan(); });
+</script>
+</body>
+</html>
